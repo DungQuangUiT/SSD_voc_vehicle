@@ -12,6 +12,8 @@ from extract_inform_annotation import Anno_xml
 from model import SSD
 from multiboxloss import MultiBoxLoss
 import csv
+import pandas as pd
+from torch.utils.tensorboard import SummaryWriter
 
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -156,20 +158,31 @@ def train_model(net, dataloader_dict, criterion, optimizer, num_epochs):
             if ((epoch+1) % 10 == 0):
                 torch.save(net.state_dict(), "./data/weights/ssd300_" + str(epoch+1) + ".pth")
         
-    # Plotting loss values
-    plt.figure(figsize=(12, 8))
-    plt.plot(loss_values["train"]["total"], label='Train Total Loss')
-    plt.plot(loss_values["train"]["loc"], label='Train Localization Loss')
-    plt.plot(loss_values["train"]["conf"], label='Train Confidence Loss')
-    plt.plot(loss_values["val"]["total"], label='Validation Total Loss')
-    plt.plot(loss_values["val"]["loc"], label='Validation Localization Loss')
-    plt.plot(loss_values["val"]["conf"], label='Validation Confidence Loss')
-    plt.xlabel('Iterations')
-    plt.ylabel('Loss')
-    plt.title('Training and Validation Losses')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+            # Plotting loss values
+            # Đọc dữ liệu từ file CSV
+            df = pd.read_csv('/content/data/loss_values.csv')
+
+            # Tạo một DataFrame mới chỉ chứa thông tin của epoch cuối cùng cho mỗi phase
+            df_last_epoch = df.groupby(['phase', 'iteration']).tail(1)
+
+            # Tạo SummaryWriter
+            writer2 = SummaryWriter()
+
+            # Ghi dữ liệu vào TensorBoard
+            for phase in ['train', 'val']:
+                for loss_type in ['loc_loss', 'conf_loss', 'total_loss']:
+                    # Tạo tag cho TensorBoard
+                    tag = f'{phase}/{loss_type}'
+
+                    # Lấy dữ liệu loss tương ứng
+                    data = df_last_epoch[df_last_epoch['phase'] == phase][loss_type]
+
+                    # Ghi dữ liệu vào TensorBoard
+                    for epoch, loss in zip(df_last_epoch[df_last_epoch['phase'] == phase]['iteration'], data):
+                        writer2.add_scalar(tag, loss, epoch)
+
+            # Đóng SummaryWriter
+            writer.close()
 
 num_epochs = 100
 
